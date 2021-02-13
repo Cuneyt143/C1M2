@@ -28,57 +28,60 @@
 #------------------------------------------------------------------------------
 include sources.mk
 
-#PLATFORM:=$(shell uname -s)
+OBJS=	$(SOURCES:.c=.o)
+TARGET= c1m2.out
+LDFLAGS= -Xlinker -Map=c1m2.map
+GENFLAGS= -Wall -Werror -g -O0 -std=c99
 
-CPU = cortex-m4
-BASENAME = src
-TARGET = $(BASENAME).out
-ARC = thumb
-SPECS = nosys.specs
-MARCH = armv7e-m 
-MFLOAT = hard
-MFPU = fpv4-sp-d16
-LDFLAGS= -Wl, -Map=$(BASENAME).map
- 
-ifeq ($(PLATFORM),HOST)
-	TARGET = -DHOST
-	CC = gcc
-	CFLAGS = -Wall -Werror -g -O0 -std=c99
+#  PLATFORM=MSP432
+ifeq	($(PLATFORM),MSP432)
+# Architecture MSP432 Specific Flags
+	LINKER_FILE=-T msp432p401r.lds
+	CPU=cortex-m4
+	ARCH=armv7e-m
+	SPECS=nosys.specs
+	SPECS_EX = -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+# Compiler Flags and Defines	
+	CC=arm-none-eabi-gcc
+	LD=arm-none-eabi-ld
+	CFLAGS =-DMSP432
+	CPPFLAGS = $(GENFLAGS) $(SPECS_EX) -mcpu=$(CPU) -march=$(ARCH) -specs=$(SPECS)
 endif
 
-ifeq ($(PLATFORM),MSP432)
-	CC = arm-none-eabi-gcc
-	LD = arm-none-eabi-ld
-	LINKER_FILE = -T msp432p401r.lds
-	CFLAGS = -mcpu=$(CPU) -m$(ARC) -march=$(MARCH) -Wall -Werror -g -O0 -std=c99 -mfloat-abi=hard -mfpu=$(MFPU) --specs=$(SPECS)
-	
-	TARGET = -DMSP432 
+#  PLATFORM=HOST
+ifeq	($(PLATFORM),HOST)
+	SPECS=nosys.specs
+	CC=gcc
+	LD=ld
+	CFLAGS =-DHOST
+	CPPFLAGS = $(GENFLAGS)
 endif
 
+%.i: %.c
+	$(CC) -E $^ -o $@ $(CFLAGS)  $(INCLUDES)
 
-OBJS = $(SOURCES:.c=.o)
-%.o : %.c
-	$(CC)  -c  $<  $(CFLAGS)  -o  $@
-    
-%.i : %.c
-	$(CC)  -c  $<  $(CFLAGS)  -o  $@ -E 
-    
-%.asm : %.c $(TARGET)
-	$(CC) -S 
-    
+%.asm: %.c
+	$(CC) -S $^  $(CFLAGS) $(CPPFLAGS) $(INCLUDES)
+
+%.o: %.c
+	$(CC) -c $^ -o $@ $(CFLAGS) $(CPPFLAGS) $(INCLUDES)
+
+c1m2.out: $(OBJS)
+	$(CC) $(CFLAGS) -o c1m2.out $(OBJS) $(INCLUDES) $(LDFLAGS)
+
+# Compile all object files, but do not link.
+.PHONY: compile-all
+compile-all:
+	make clean
+	make $(OBJS)
+
+# Compile all object files and link into a final executable.
 .PHONY: build
-build: all
-.PHONNY: all
-all: $(TARGET)
-$(TARGET) : $(OBJS)
-	$(CC)  $(OBJS)  $(CFLAGS) $(LDFLAGS) $(PLATFORM_TARGET) -o c1m2.out $@
+build:
+	make clean
+	make c1m2.out
 
+# Remove all compiled objects, preprocessed outputs, assembly outputs, executable files and build output files.
 .PHONY: clean
 clean:
-	rm -f $(OBJS)  $(TARGET) $(BASENAME)
-
-.PHONY: compilde-all
-compile-all:%.o 
-	$(CC) 
-
-
+	rm -f *.i *.o *.s *.map *.out
